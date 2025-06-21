@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -15,18 +16,25 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         // Create or update user profile in Firestore
         await createUserProfile(user);
+        
+        // Redirect authenticated users away from auth pages
+        if (pathname.startsWith('/auth/')) {
+          router.push('/upload');
+        }
       }
       setUser(user);
       setLoading(false);
     });
     return unsubscribe;
-  }, []);
+  }, [router, pathname]);
 
   const logout = async () => {
     await signOut(auth);

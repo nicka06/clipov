@@ -26,7 +26,7 @@ export function SignUpForm() {
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      router.push('/upload');
+      // Let AuthContext handle the user state, redirect will happen naturally
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -40,7 +40,7 @@ export function SignUpForm() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      router.push('/upload');
+      // Let AuthContext handle the user state, redirect will happen naturally
     } catch (error: any) {
       setError(error.message);
     } finally {
