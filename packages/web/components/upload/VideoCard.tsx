@@ -114,6 +114,7 @@ export function VideoCard({ video, onRetry, onPlay, onClick }: VideoCardProps) {
     if (onClick) {
       onClick(video.id);
     } else if (video.status === 'analysis_complete' || video.status === 'analysis_partial') {
+      // Default behavior: navigate to edit page for completed videos
       onPlay?.(video.id);
     }
   };

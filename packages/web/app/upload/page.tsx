@@ -152,7 +152,8 @@ export default function UploadPage() {
         <div className="relative mb-8">
           <UploadZone onUploadComplete={(videoId) => {
             console.log('Upload completed:', videoId);
-            // Video library will automatically update via Firestore listener
+            // Navigate to edit page for the uploaded video
+            router.push(`/edit/${videoId}`);
           }} />
           
           {/* Video Library Toggle Button - positioned relative to upload zone */}
@@ -227,8 +228,9 @@ export default function UploadPage() {
                         key={video.id}
                         video={video}
                         onPlay={(id) => {
-                          console.log('Play video:', id);
-                          // TODO: Implement video player or analysis view
+                          console.log('Navigate to edit page for video:', id);
+                          setShowVideoLibrary(false); // Close the library modal
+                          router.push(`/edit/${id}`);
                         }}
                         onRetry={(id) => {
                           console.log('Retry video:', id);
@@ -236,7 +238,10 @@ export default function UploadPage() {
                         }}
                         onClick={(id) => {
                           console.log('Video card clicked:', id);
-                          // TODO: Implement video details view
+                          if (video.status === 'analysis_complete' || video.status === 'analysis_partial') {
+                            setShowVideoLibrary(false); // Close the library modal
+                            router.push(`/edit/${id}`);
+                          }
                         }}
                       />
                     ))}

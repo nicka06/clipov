@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, onSnapshot, collection, query, where, limit } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -18,6 +18,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -41,7 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      logout
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -60,7 +66,12 @@ async function createUserProfile(user: User) {
       email: user.email,
       authProvider: user.providerData[0]?.providerId.includes('google') ? 'google' : 'email',
       createdAt: serverTimestamp(),
-      lastLoginAt: serverTimestamp()
+      lastLoginAt: serverTimestamp(),
+      projects: {
+        totalProjects: 0,
+        lastProjectId: null,
+        hasCreatedProject: false
+      }
     });
   } else {
     // Update last login time

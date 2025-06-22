@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useUpload } from '@/lib/useUpload';
 import { formatFileSize } from '@clipov/shared';
 
@@ -6,10 +6,21 @@ interface UploadZoneProps {
   onUploadComplete?: (videoId: string) => void;
 }
 
-export function UploadZone({ }: UploadZoneProps) {
+export function UploadZone({ onUploadComplete }: UploadZoneProps) {
   const { uploads, uploadFile, pauseUpload, resumeUpload, cancelUpload, isUploading } = useUpload();
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processedUploads, setProcessedUploads] = useState<Set<string>>(new Set());
+
+  // Monitor uploads for completion and call callback
+  useEffect(() => {
+    uploads.forEach(upload => {
+      if (upload.status === 'completed' && upload.videoId && !processedUploads.has(upload.uploadSessionId)) {
+        setProcessedUploads(prev => new Set(prev).add(upload.uploadSessionId));
+        onUploadComplete?.(upload.videoId);
+      }
+    });
+  }, [uploads, onUploadComplete, processedUploads]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

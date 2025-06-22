@@ -489,4 +489,603 @@ videos/{videoId}/segments/segment_{N}: {
 
 ---
 
+## 📋 Phase 5: Manual Video Editing Interface
+
+### 🎯 Phase 5 Overview
+Create an intuitive video editing interface where users can manually select and arrange clips from their analyzed videos to create custom compilations.
+
+**Core Philosophy**: AI Analysis → Manual Selection → Timeline Editing → Video Export
+
+**Key User Flow**: 
+1. Select video from library → Edit page
+2. Search for scenes within that video → Add clips to timeline
+3. Arrange, trim, and adjust clips → Export final video
+
+---
+
+## 📋 5.1 NAVIGATION & PAGE STRUCTURE
+
+### 5.1.1 App Navigation Enhancement
+**Updated Navbar Structure**:
+- **Upload Page** (`/upload`) - Primary entry point (existing)
+- **Projects Page** (`/projects`) - Project management (new)
+- **Edit Page** (`/edit/:videoId`) - Video editing interface (new)
+
+**Navigation Rules**:
+- Upload and Projects pages have navbar to switch between them
+- Edit page is a separate focused interface (minimal navbar)
+- Projects page only appears in navbar AFTER user creates their first project
+
+### 5.1.2 Page Hierarchy & User Flow
+```
+/upload (main entry)
+    ↓ (user uploads & analyzes video)
+/upload (library shows analyzed videos)
+    ↓ (user clicks video card)
+/edit/:videoId (editing interface)
+    ↓ (user adds first clip)
+/projects (projects page appears in navbar)
+    ↓ (user can return to continue editing)
+/edit/:projectId (resume editing existing project)
+```
+
+---
+
+## 📋 5.2 PROJECTS PAGE DESIGN
+
+### 5.2.1 Projects List Interface
+**Projects Page Layout** (`/projects`):
+```jsx
+<ProjectsPage>
+  <PageHeader>
+    <Title>Your Video Projects</Title>
+    <CreateButton>Start New Project</CreateButton>
+  </PageHeader>
+  
+  <ProjectsGrid>
+    {projects.map(project => (
+      <ProjectCard key={project.id}>
+        <Thumbnail src={project.thumbnailUrl} />
+        <ProjectInfo>
+          <Title>{project.name}</Title>
+          <SourceVideo>{project.sourceVideoName}</SourceVideo>
+          <Stats>
+            {project.clipCount} clips • {project.totalDuration}
+          </Stats>
+          <LastEdited>{project.lastEditedAt}</LastEdited>
+        </ProjectInfo>
+        <Actions>
+          <EditButton />
+          <DeleteButton />
+          <ExportButton />
+        </Actions>
+      </ProjectCard>
+    ))}
+  </ProjectsGrid>
+</ProjectsPage>
+```
+
+### 5.2.2 Project Creation Flow
+**New Project Initiation**:
+1. **From Upload Page**: User clicks video → Goes to `/edit/:videoId` (creates project on first clip)
+2. **From Projects Page**: User clicks "Start New Project" → Modal to select source video → Goes to edit page
+3. **Auto-naming**: Projects auto-named as "{VideoName} - Edit 1" (user can rename)
+
+### 5.2.3 Project Management Features
+**Project Operations**:
+- **Edit**: Continue editing → `/edit/:projectId`
+- **Duplicate**: Create copy of project with same clips
+- **Export**: Generate final video file
+- **Delete**: Remove project (confirm dialog)
+- **Rename**: Inline editing of project name
+
+---
+
+## 📋 5.3 EDIT PAGE ARCHITECTURE
+
+### 5.3.1 Edit Page Layout & States
+**Edit Page URL Structure**:
+- **New Project**: `/edit/:videoId` (creates project when first clip added)
+- **Existing Project**: `/edit/:projectId` (resumes editing)
+
+**Page Layout**:
+```jsx
+<EditPage>
+  <Header>
+    <BackButton />
+    <ProjectTitle editable />
+    <SaveStatus />
+    <ExportButton />
+  </Header>
+  
+  <MainContent>
+    {timeline.clips.length === 0 ? (
+      <EmptyState>
+        <SearchInput placeholder="Describe the scene you want to find..." />
+      </EmptyState>
+    ) : (
+      <>
+        <VideoPreview>
+          <Player src={compiledPreviewUrl} />
+          <PlaybackControls />
+        </VideoPreview>
+        <AddClipButton onClick={openSearchModal} />
+      </>
+    )}
+  </MainContent>
+  
+  <Timeline>
+    {clips.map(clip => (
+      <ClipItem key={clip.id}>
+        <Thumbnail />
+        <ClipControls>
+          <TrimStart />
+          <Duration />
+          <TrimEnd />
+        </ClipControls>
+        <RemoveButton />
+      </ClipItem>
+    ))}
+    <TotalDuration />
+  </Timeline>
+</EditPage>
+```
+
+### 5.3.2 State Management Strategy
+**Edit Page States**:
+1. **Empty Project**: Large search input prominently displayed
+2. **Building Project**: Video preview + timeline with clips + search button
+3. **Saving**: Auto-save progress indicators
+4. **Exporting**: Progress bar for video compilation
+
+---
+
+## 📋 5.4 CLIP SEARCH & SELECTION SYSTEM
+
+### 5.4.1 Scene Search Interface
+**Search Modal Design**:
+```jsx
+<ClipSearchModal>
+  <SearchHeader>
+    <SearchInput 
+      placeholder="Describe what you're looking for..."
+      autoFocus
+    />
+    <VideoInfo>
+      Searching in: {currentVideo.name}
+    </VideoInfo>
+  </SearchHeader>
+  
+  <SearchResults>
+    {results.map(segment => (
+      <SegmentOption key={segment.id}>
+        <Thumbnail src={segment.thumbnailUrl} />
+        <SegmentInfo>
+          <TimeRange>{segment.startTime} - {segment.endTime}</TimeRange>
+          <Description>{segment.searchableText}</Description>
+          <ConfidenceScore>{segment.relevanceScore}% match</ConfidenceScore>
+        </SegmentInfo>
+        <AddButton onClick={() => addClipToTimeline(segment)} />
+      </SegmentOption>
+    ))}
+  </SearchResults>
+  
+  <ModalActions>
+    <CancelButton />
+    <SearchTips />
+  </ModalActions>
+</ClipSearchModal>
+```
+
+### 5.4.2 Search Implementation Logic
+**Search Process**:
+1. **User Types Query**: "cooking scene" or "people laughing"
+2. **Real-time Search**: Query segments from current video only
+3. **Semantic Matching**: Use existing `searchableText` field from Phase 3
+4. **Results Display**: Show all matching segments sorted by relevance
+5. **Quick Add**: Single click to add segment to timeline
+
+**Search Scope**:
+- **Video-Specific**: Only search within the currently selected video
+- **All Segments**: Search across all analyzed segments from that video
+- **Real-time**: Results update as user types (debounced)
+
+### 5.4.3 Clip Addition Workflow
+**Adding Clips to Timeline**:
+```javascript
+// User clicks segment in search results
+function addClipToTimeline(segment) {
+  const newClip = {
+    id: generateClipId(),
+    segmentId: segment.id,
+    videoId: segment.videoId,
+    originalStart: segment.startTime,
+    originalEnd: segment.endTime,
+    trimmedStart: segment.startTime,    // User can adjust
+    trimmedEnd: segment.endTime,        // User can adjust
+    position: timeline.clips.length,    // Order in timeline
+    thumbnailUrl: segment.thumbnailUrl,
+    addedAt: new Date()
+  };
+  
+  // Add to timeline
+  timeline.clips.push(newClip);
+  
+  // Auto-save project
+  saveProjectToFirestore();
+  
+  // Close search modal
+  closeSearchModal();
+  
+  // Update preview video
+  generatePreview();
+}
+```
+
+---
+
+## 📋 5.5 TIMELINE EDITING INTERFACE
+
+### 5.5.1 Timeline Component Design
+**Timeline Layout**:
+```jsx
+<Timeline>
+  <TimelineHeader>
+    <TotalDuration>{calculateTotalDuration()}</TotalDuration>
+    <TimelineControls>
+      <ZoomIn />
+      <ZoomOut />
+      <FitToWidth />
+    </TimelineControls>
+  </TimelineHeader>
+  
+  <ClipTrack>
+    {clips.map((clip, index) => (
+      <ClipItem 
+        key={clip.id}
+        clip={clip}
+        position={index}
+        onDrag={handleClipReorder}
+        onTrim={handleClipTrim}
+        onRemove={handleClipRemove}
+      />
+    ))}
+    <AddClipButton />
+  </ClipTrack>
+  
+  <TimelineRuler>
+    {/* Time markers: 0:00, 0:05, 0:10, etc. */}
+  </TimelineRuler>
+</Timeline>
+```
+
+### 5.5.2 Clip Manipulation Features
+**Individual Clip Controls**:
+```jsx
+<ClipItem>
+  <ClipThumbnail src={clip.thumbnailUrl} />
+  
+  <ClipControls>
+    <TrimButton 
+      side="left" 
+      onClick={() => adjustClipStart(clip.id, -1)} 
+      disabled={clip.trimmedStart <= clip.originalStart}
+    />
+    
+    <ClipDuration>
+      {formatDuration(clip.trimmedEnd - clip.trimmedStart)}
+    </ClipDuration>
+    
+    <TrimButton 
+      side="right" 
+      onClick={() => adjustClipEnd(clip.id, +1)}
+      disabled={clip.trimmedEnd >= clip.originalEnd}
+    />
+  </ClipControls>
+  
+  <ClipActions>
+    <DragHandle />
+    <RemoveButton />
+  </ClipActions>
+</ClipItem>
+```
+
+**Clip Adjustment Logic**:
+```javascript
+// Extend/trim clip duration
+function adjustClipStart(clipId, seconds) {
+  const clip = findClipById(clipId);
+  const newStart = clip.trimmedStart + seconds;
+  
+  // Validate bounds
+  if (newStart >= clip.originalStart && newStart < clip.trimmedEnd) {
+    clip.trimmedStart = newStart;
+    saveProject();
+    regeneratePreview();
+  }
+}
+
+function adjustClipEnd(clipId, seconds) {
+  const clip = findClipById(clipId);
+  const newEnd = clip.trimmedEnd + seconds;
+  
+  // Validate bounds  
+  if (newEnd <= clip.originalEnd && newEnd > clip.trimmedStart) {
+    clip.trimmedEnd = newEnd;
+    saveProject();
+    regeneratePreview();
+  }
+}
+```
+
+### 5.5.3 Timeline Interactions
+**User Interactions**:
+- **Drag & Drop**: Reorder clips by dragging
+- **Trim Controls**: +/- buttons to extend/contract clips
+- **Click to Play**: Click clip thumbnail to preview that segment
+- **Remove**: X button to delete clip from timeline
+- **Add More**: + button to open search modal for more clips
+
+---
+
+## 📋 5.6 VIDEO PREVIEW SYSTEM
+
+### 5.6.1 Preview Generation
+**Real-time Preview Strategy**:
+- **Client-side Preview**: Concatenate video URLs for quick preview
+- **Server-side Compilation**: Generate actual compiled video for export
+- **Thumbnail Timeline**: Show visual timeline of selected clips
+
+**Preview Implementation**:
+```javascript
+// Generate client-side preview URL
+function generatePreviewUrl(clips) {
+  // Create playlist of video segments with time ranges
+  const playlist = clips.map(clip => ({
+    url: clip.segmentUrl,
+    startTime: clip.trimmedStart - clip.originalStart,
+    endTime: clip.trimmedEnd - clip.originalStart
+  }));
+  
+  // Use video.js or similar to play sequential clips
+  return createVideoPlaylist(playlist);
+}
+```
+
+### 5.6.2 Preview Player Features
+**Video Player Controls**:
+- **Play/Pause**: Standard video controls
+- **Scrub Timeline**: Seek through entire compilation
+- **Clip Boundaries**: Visual markers showing clip transitions
+- **Current Time**: Show position within compilation
+- **Full Screen**: Expand preview for better viewing
+
+---
+
+## 📋 5.7 DATABASE SCHEMA
+
+### 5.7.1 Projects Collection Structure
+**Projects Collection** (`projects/{projectId}`):
+```json
+{
+  "id": "proj_abc123",
+  "userId": "user123",
+  "name": "Family Dinner Highlights",
+  "sourceVideoId": "vid789",
+  "sourceVideoName": "Family Dinner 2024",
+  
+  "clips": [
+    {
+      "id": "clip_001",
+      "segmentId": "vid789_segment_023",
+      "position": 0,
+      "originalStart": 110.0,
+      "originalEnd": 115.0,
+      "trimmedStart": 111.0,
+      "trimmedEnd": 114.5,
+      "thumbnailUrl": "segments/vid789_segment_023.jpg",
+      "addedAt": "2024-01-15T14:22:30Z"
+    },
+    {
+      "id": "clip_002", 
+      "segmentId": "vid789_segment_067",
+      "position": 1,
+      "originalStart": 330.0,
+      "originalEnd": 335.0,
+      "trimmedStart": 330.0,
+      "trimmedEnd": 333.0,
+      "thumbnailUrl": "segments/vid789_segment_067.jpg", 
+      "addedAt": "2024-01-15T14:23:15Z"
+    }
+  ],
+  
+  "metadata": {
+    "totalDuration": 6.5,
+    "clipCount": 2,
+    "createdAt": "2024-01-15T14:22:30Z",
+    "lastEditedAt": "2024-01-15T14:25:45Z",
+    "version": 1
+  },
+  
+  "export": {
+    "status": "none", // none, processing, completed, failed
+    "exportedAt": null,
+    "downloadUrl": null,
+    "settings": {
+      "quality": "1080p",
+      "format": "mp4"
+    }
+  }
+}
+```
+
+### 5.7.2 User Collection Extensions
+**Add to Users Collection** (`users/{userId}`):
+```json
+{
+  // ... existing user fields ...
+  "projects": {
+    "totalProjects": 3,
+    "lastProjectId": "proj_abc123", 
+    "hasCreatedProject": true
+  }
+}
+```
+
+### 5.7.3 Database Queries & Indexes
+**Required Firestore Indexes**:
+- `projects`: `userId` + `lastEditedAt` (descending)
+- `projects`: `userId` + `sourceVideoId`
+- `projects`: `userId` + `export.status`
+
+**Common Queries**:
+```javascript
+// Get user's projects (for projects page)
+const userProjects = await firebase
+  .collection('projects')
+  .where('userId', '==', currentUser.uid)
+  .orderBy('lastEditedAt', 'desc')
+  .get();
+
+// Get projects for specific video
+const videoProjects = await firebase
+  .collection('projects')
+  .where('userId', '==', currentUser.uid)
+  .where('sourceVideoId', '==', videoId)
+  .get();
+```
+
+---
+
+## 📋 5.8 SAVE & EXPORT SYSTEM
+
+### 5.8.1 Auto-Save Strategy
+**Real-time Saving**:
+- **Auto-save Triggers**: Add clip, remove clip, trim clip, reorder clips
+- **Debounced Saves**: Wait 2 seconds after last edit before saving
+- **Save Status Indicator**: "Saving...", "Saved", "Error - Retry"
+- **Conflict Resolution**: Handle multiple device editing (last write wins)
+
+**Save Implementation**:
+```javascript
+// Debounced save function
+const debouncedSave = debounce(async (projectData) => {
+  try {
+    setSaveStatus('saving');
+    await updateProject(projectData);
+    setSaveStatus('saved');
+  } catch (error) {
+    setSaveStatus('error');
+    console.error('Save failed:', error);
+  }
+}, 2000);
+
+// Trigger save on any timeline change
+function onTimelineChange() {
+  const projectData = {
+    clips: timeline.clips,
+    metadata: {
+      totalDuration: calculateTotalDuration(),
+      clipCount: timeline.clips.length,
+      lastEditedAt: new Date()
+    }
+  };
+  
+  debouncedSave(projectData);
+}
+```
+
+### 5.8.2 Video Export Pipeline
+**Export Process**:
+1. **User Clicks Export**: Validates project has clips
+2. **Queue Export Job**: Create Cloud Task for video compilation
+3. **Server Processing**: Download segments, trim, concatenate with FFmpeg
+4. **Upload Result**: Save compiled video to Cloud Storage
+5. **Notify User**: Update project with download URL
+
+**Export Job Structure**:
+```javascript
+const exportJob = {
+  projectId: "proj_abc123",
+  userId: "user123",
+  clips: project.clips,
+  settings: {
+    quality: "1080p",
+    format: "mp4",
+    fadeTransitions: true
+  },
+  status: "queued"
+};
+```
+
+---
+
+## 📋 5.9 USER EXPERIENCE FLOWS
+
+### 5.9.1 First-Time User Journey
+**Complete First Project Flow**:
+1. **Upload Video**: User uploads and analyzes their first video
+2. **Library View**: Video appears in library with "Ready" status  
+3. **Start Editing**: User clicks video card → Goes to `/edit/:videoId`
+4. **Empty Timeline**: Large search input: "Describe the scene you want..."
+5. **First Search**: User types "people talking" → Modal shows matching segments
+6. **Add First Clip**: User clicks segment → Clip appears in timeline
+7. **Project Created**: System creates project, navbar now shows "Projects"
+8. **Continue Editing**: User adds more clips, trims, reorders
+9. **Export Video**: User exports final compilation
+
+### 5.9.2 Returning User Experience
+**Experienced User Flow**:
+1. **Projects Page**: User visits `/projects` to see existing projects
+2. **Resume Editing**: Click project → Goes to `/edit/:projectId`
+3. **Timeline Loaded**: Project loads with existing clips in timeline
+4. **Quick Edits**: User adds clips via search button, adjusts timing
+5. **Export & Share**: Generate final video for sharing
+
+### 5.9.3 Edge Cases & Error Handling
+**Error Scenarios**:
+- **Deleted Source Video**: Show error, offer to remove project
+- **Corrupted Project**: Backup recovery, partial restoration
+- **Export Failures**: Retry mechanism, quality fallback options
+- **Concurrent Editing**: Last-save-wins with conflict notifications
+
+---
+
+## 📋 5.10 TECHNICAL IMPLEMENTATION PRIORITIES
+
+### 5.10.1 Development Phases
+**Phase 5.A - Basic Structure**:
+1. Create projects page and navigation
+2. Build edit page layout and routing
+3. Implement basic timeline component
+4. Set up projects database schema
+
+**Phase 5.B - Core Editing**:
+1. Build clip search modal and functionality
+2. Implement timeline clip management (add, remove, reorder)
+3. Add clip trimming controls (+/- buttons)
+4. Create auto-save system
+
+**Phase 5.C - Preview & Export**:
+1. Implement video preview generation
+2. Build export pipeline with FFmpeg
+3. Add progress tracking and notifications
+4. Polish UI and error handling
+
+### 5.10.2 Component Architecture
+**Key React Components**:
+- `ProjectsPage` - Projects list and management
+- `EditPage` - Main editing interface
+- `Timeline` - Clip timeline and controls
+- `ClipItem` - Individual clip with trim controls
+- `ClipSearchModal` - Search and add clips
+- `VideoPreview` - Preview player
+- `ExportModal` - Export settings and progress
+
+---
+
+*Phase 5 provides users with an intuitive, manual video editing interface that leverages the AI analysis from Phase 3 to help users quickly find and arrange the exact moments they want in their final videos.*
+
+---
+
 *This map provides the logical flow and decision points for each phase. Detailed implementation code is maintained in the todo file.*

@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,3 +19,15 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);      // Authentication service
 export const db = getFirestore(app);   // Database service  
 export const storage = getStorage(app); // File storage service 
+
+// Utility function to get download URL from storage path
+export const getStorageDownloadURL = async (storagePath: string): Promise<string> => {
+  try {
+    const storageRef = ref(storage, storagePath);
+    const downloadURL = await getDownloadURL(storageRef);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error getting download URL:', error);
+    throw error;
+  }
+}; 
