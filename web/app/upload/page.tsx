@@ -2,17 +2,75 @@
 import { useAuth } from '@/context/AuthContext';
 import { Navbar } from '@/components/ui/Navbar';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { VideoCard } from '@/components/upload/VideoCard';
+import { UploadZone } from '@/components/upload/UploadZone';
+
+interface Video {
+  id: string;
+  name: string;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: Date;
+  status: 'uploading' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+}
 
 export default function UploadPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [showVideoLibrary, setShowVideoLibrary] = useState(false);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [videosLoading, setVideosLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/auth/signin');
     }
   }, [user, loading, router]);
+
+  // Real-time listener for user's videos
+  useEffect(() => {
+    if (!user) {
+      setVideos([]);
+      setVideosLoading(false);
+      return;
+    }
+
+    const videosQuery = query(
+      collection(db, 'videos'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(videosQuery, (snapshot) => {
+      const videosList: Video[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        videosList.push({
+          id: doc.id,
+          name: data.name || data.fileName,
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+          uploadedAt: data.uploadedAt?.toDate() || new Date(),
+          status: data.status,
+          progress: data.progress
+        });
+      });
+      
+      // Sort by upload date (newest first)
+      videosList.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+      
+      setVideos(videosList);
+      setVideosLoading(false);
+    }, (error) => {
+      console.error('Error fetching videos:', error);
+      setVideosLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   if (loading) {
     return (
@@ -33,28 +91,101 @@ export default function UploadPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Upload Center
           </h1>
+          <p className="text-gray-600">
+            Upload your videos and manage your library
+          </p>
+        </div>
+        
+        {/* Upload Zone */}
+        <div className="relative mb-8">
+          <UploadZone onUploadComplete={(videoId) => {
+            console.log('Upload completed:', videoId);
+            // Video library will automatically update via Firestore listener
+          }} />
           
-          <div className="bg-white p-8 rounded-lg shadow-sm border-2 border-dashed border-gray-300">
-            <div className="text-center">
-              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Video Library Toggle Button - positioned relative to upload zone */}
+          <div className="absolute -bottom-6 right-0">
+            <button
+              onClick={() => setShowVideoLibrary(!showVideoLibrary)}
+              className={`flex items-center space-x-2 px-4 py-3 rounded-full shadow-lg transition-all duration-200 ${
+                showVideoLibrary 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 6a2 2 0 012-2h6l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Video Upload</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Upload functionality coming soon! We're building the smart video processing system.
-              </p>
-            </div>
-          </div>
-          
-          <div className="mt-8 text-sm text-gray-600">
-            <p>Signed in as: <strong>{user.email}</strong></p>
+              <span className="font-medium">My Videos</span>
+              {!videosLoading && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                  {videos.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
+        
+        {/* User Info */}
+        <div className="text-center text-sm text-gray-600">
+          <p>Signed in as: <strong>{user.email}</strong></p>
+        </div>
+        
+        {/* Video Library Popup - will be a separate component */}
+        {showVideoLibrary && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-4">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">My Video Library</h2>
+                <button 
+                  onClick={() => setShowVideoLibrary(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+                             {/* Content */}
+               <div className="p-6 max-h-96 overflow-y-auto">
+                 {videosLoading ? (
+                   <div className="text-center py-12">
+                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                     <p className="text-gray-500">Loading videos...</p>
+                   </div>
+                 ) : videos.length === 0 ? (
+                   <div className="text-center text-gray-500 py-12">
+                     <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                     </svg>
+                     <p className="text-lg font-medium mb-2">No videos yet</p>
+                     <p>Upload your first video to get started!</p>
+                   </div>
+                 ) : (
+                   <div className="space-y-4">
+                     {videos.map((video) => (
+                       <VideoCard
+                         key={video.id}
+                         video={video}
+                         onPlay={(id) => console.log('Play video:', id)}
+                         onRetry={(id) => console.log('Retry video:', id)}
+                         onRename={(id, newName) => console.log('Rename video:', id, newName)}
+                       />
+                     ))}
+                   </div>
+                 )}
+               </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,37 @@
+'use client';
 import { Navbar } from '@/components/ui/Navbar';
 import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // Redirect authenticated users to upload page
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/upload');
+    }
+  }, [user, loading, router]);
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render homepage content if user is authenticated (will redirect)
+  if (user) {
+    return null;
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
