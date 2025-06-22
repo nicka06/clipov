@@ -112,7 +112,7 @@ export class SelfHostedAudioAnalyzer {
   }
 
   /**
-   * Call the self-hosted AI service for transcription
+   * Call the self-hosted AI service for transcription with retry logic
    */
   private async callTranscriptionService(audioPath: string): Promise<{
     transcript: string;
@@ -126,47 +126,120 @@ export class SelfHostedAudioAnalyzer {
     }>;
     duration: number;
   }> {
-    try {
-      console.log(`🌐 Calling self-hosted Whisper service at: ${this.aiServiceUrl}/analyze/audio/analyze`);
-      
-      // Create form data
-      const formData = new FormData();
-      const audioBuffer = await fs.readFile(audioPath);
-      formData.append('file', audioBuffer, {
-        filename: 'audio.wav',
-        contentType: 'audio/wav'
-      });
+    const maxRetries = 3;
+    const baseDelay = 2000; // 2 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🌐 Calling self-hosted Whisper service at: ${this.aiServiceUrl}/analyze/audio/analyze (attempt ${attempt}/${maxRetries})`);
+        
+        // Create form data
+        const formData = new FormData();
+        const audioBuffer = await fs.readFile(audioPath);
+        formData.append('file', audioBuffer, {
+          filename: 'audio.wav',
+          contentType: 'audio/wav'
+        });
 
-      // Call the AI service
-      const response = await fetch(`${this.aiServiceUrl}/analyze/audio/analyze`, {
-        method: 'POST',
-        body: formData,
-        headers: formData.getHeaders()
-      });
+        // Call the AI service with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ AI service error response: ${response.status} ${response.statusText} - ${errorText}`);
-        throw new Error(`AI service responded with status ${response.status}: ${response.statusText}`);
+        const response = await fetch(`${this.aiServiceUrl}/analyze/audio/analyze`, {
+          method: 'POST',
+          body: formData,
+          headers: formData.getHeaders(),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ AI service error response: ${response.status} ${response.statusText} - ${errorText}`);
+          
+          // Check if this is a retryable error
+          if (this.isRetryableError(response.status, errorText)) {
+            if (attempt < maxRetries) {
+              const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+              console.log(`🔄 Retryable error detected. Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+          
+          throw new Error(`AI service responded with status ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json() as any;
+        console.log(`📊 AI service response: ${JSON.stringify(result).substring(0, 200)}...`);
+        
+        console.log(`✅ Self-hosted transcription completed on attempt ${attempt}. Language: ${result.language}`);
+        
+        return {
+          transcript: result.transcript || '',
+          language: result.language || 'en',
+          confidence: 0.95, // Whisper doesn't provide confidence, but is generally accurate
+          segments: result.segments || [],
+          duration: result.duration || 0
+        };
+
+      } catch (error) {
+        console.error(`❌ Self-hosted transcription attempt ${attempt}/${maxRetries} failed:`, error);
+        
+        // Check if this is a retryable error
+        if (this.isRetryableNetworkError(error) && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          console.log(`🔄 Network error detected. Waiting ${delay}ms before retry ${attempt + 1}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If this is the last attempt or non-retryable error, throw
+        if (attempt === maxRetries) {
+          throw new Error(`Self-hosted transcription failed after ${maxRetries} attempts: ${error}`);
+        }
       }
-
-      const result = await response.json() as any;
-      console.log(`📊 AI service response: ${JSON.stringify(result).substring(0, 200)}...`);
-      
-      console.log(`✅ Self-hosted transcription completed. Language: ${result.language}`);
-      
-      return {
-        transcript: result.transcript || '',
-        language: result.language || 'en',
-        confidence: 0.95, // Whisper doesn't provide confidence, but is generally accurate
-        segments: result.segments || [],
-        duration: result.duration || 0
-      };
-
-    } catch (error) {
-      console.error('❌ Self-hosted transcription service failed:', error);
-      throw error;
     }
+    
+    throw new Error('Transcription failed - should not reach here');
+  }
+
+  /**
+   * Check if an HTTP error is retryable
+   */
+  private isRetryableError(status: number, errorText: string): boolean {
+    // Retryable HTTP status codes
+    if ([500, 502, 503, 504, 429].includes(status)) {
+      return true;
+    }
+    
+    // Check for Cloud Run specific error messages
+    if (errorText.includes('server encountered an error') ||
+        errorText.includes('try again in 30 seconds') ||
+        errorText.includes('temporarily unavailable') ||
+        errorText.includes('timeout')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if a network error is retryable
+   */
+  private isRetryableNetworkError(error: any): boolean {
+    if (!error) return false;
+    
+    const errorMessage = error.message?.toLowerCase() || '';
+    
+    // Network/timeout related errors
+    return errorMessage.includes('timeout') ||
+           errorMessage.includes('network') ||
+           errorMessage.includes('econnreset') ||
+           errorMessage.includes('enotfound') ||
+           errorMessage.includes('aborted') ||
+           errorMessage.includes('fetch');
   }
 
   /**

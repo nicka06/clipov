@@ -299,9 +299,9 @@ async function processVideoInBackground(videoId: string, userId: string, analysi
       });
       
       const aiAnalysisStartTime = Date.now();
-      const PARALLEL_LIMIT = 4; // Increased from 2 to 4 - no more Google API rate limits!
-      console.log(`🔥 Processing up to ${PARALLEL_LIMIT} segments simultaneously (self-hosted, no quota limits!)`);
-      console.log(`🚀 SPEED BOOST: Increased parallel processing from 2 to ${PARALLEL_LIMIT} segments since we're self-hosted`);
+      const PARALLEL_LIMIT = 2; // Reduced back to 2 due to Cloud Run memory/CPU limits
+      console.log(`🔥 Processing up to ${PARALLEL_LIMIT} segments simultaneously (Cloud Run optimized)`);
+      console.log(`⚖️ OPTIMIZATION: Using 2 parallel segments to avoid Cloud Run timeouts`);
       
       // Split segments into chunks for parallel processing
       const segmentChunks = [];
