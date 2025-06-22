@@ -192,10 +192,15 @@ export class VideoSegmenter {
       ffmpeg(videoPath)
         .seekInput(timeOffset)
         .frames(1)
-        .size('320x180')
+        .videoFilters([
+          // Scale to fit within 320x180 while preserving aspect ratio
+          'scale=320:180:force_original_aspect_ratio=decrease',
+          // Add black padding to reach exact 320x180
+          'pad=320:180:(ow-iw)/2:(oh-ih)/2:color=black'
+        ])
         .format('image2')
         .on('end', () => {
-          console.log(`Thumbnail generated: ${outputPath}`);
+          console.log(`Thumbnail generated (aspect ratio preserved): ${outputPath}`);
           resolve();
         })
         .on('error', (err: Error) => {

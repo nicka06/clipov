@@ -130,7 +130,7 @@ async function processVideoInBackground(videoId: string, userId: string, analysi
       await adminDb.collection('videos').doc(videoId).update({
         analysisProgress: 15,
         currentStep: 'Standardizing video',
-        stepDetails: `Converting to standard format (${metadata.resolution} → 1920x1080, ${metadata.frameRate}fps → 30fps)`
+        stepDetails: `Converting to standard format (${metadata.resolution} → 1920x1080 with aspect ratio preserved, ${metadata.frameRate}fps → 30fps)`
       });
       
       const standardizeStartTime = Date.now();

@@ -117,7 +117,12 @@ export class VideoProcessor {
       ffmpeg(inputPath)
         .videoCodec('h264_videotoolbox') // Apple hardware encoder
         .audioCodec('aac')
-        .size('1920x1080')
+        .videoFilters([
+          // Scale to fit within 1920x1080 while preserving aspect ratio
+          'scale=1920:1080:force_original_aspect_ratio=decrease',
+          // Add black padding to reach exact 1920x1080
+          'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black'
+        ])
         .fps(30)
         .audioBitrate('128k')
         .videoBitrate('2000k')
@@ -134,7 +139,7 @@ export class VideoProcessor {
           console.log(`📈 Hardware acceleration progress: ${progress.percent?.toFixed(1)}%`);
         })
         .on('end', () => {
-          console.log('✅ Hardware-accelerated video standardization completed');
+          console.log('✅ Hardware-accelerated video standardization completed (aspect ratio preserved)');
           resolve(outputPath);
         })
         .on('error', (err: Error) => {
@@ -155,7 +160,12 @@ export class VideoProcessor {
       ffmpeg(inputPath)
         .videoCodec('libx264')
         .audioCodec('aac')
-        .size('1920x1080')
+        .videoFilters([
+          // Scale to fit within 1920x1080 while preserving aspect ratio
+          'scale=1920:1080:force_original_aspect_ratio=decrease',
+          // Add black padding to reach exact 1920x1080
+          'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black'
+        ])
         .fps(30)
         .audioBitrate('128k')
         .videoBitrate('2000k')
@@ -171,7 +181,7 @@ export class VideoProcessor {
           console.log(`⏳ CPU encoding progress: ${progress.percent?.toFixed(1)}%`);
         })
         .on('end', () => {
-          console.log('✅ CPU-based video standardization completed');
+          console.log('✅ CPU-based video standardization completed (aspect ratio preserved)');
           resolve(outputPath);
         })
         .on('error', (err: Error) => {
