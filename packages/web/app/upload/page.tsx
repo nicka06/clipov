@@ -14,8 +14,20 @@ interface Video {
   fileName: string;
   fileSize: number;
   uploadedAt: Date;
-  status: 'uploading' | 'processing' | 'completed' | 'failed';
+  status: 'uploading' | 'processing' | 'analyzing' | 'analysis_complete' | 'analysis_partial' | 'analysis_failed' | 'failed';
   progress?: number;
+  analysisProgress?: number;
+  currentStep?: string;
+  stepDetails?: string;
+  duration?: number;
+  resolution?: string;
+  thumbnailUrl?: string;
+  processingMetadata?: {
+    segmentCount?: number;
+    successfulSegments?: number;
+    failedSegments?: number;
+    successRate?: number;
+  };
 }
 
 export default function UploadPage() {
@@ -55,9 +67,43 @@ export default function UploadPage() {
           fileSize: data.fileSize,
           uploadedAt: data.uploadedAt?.toDate() || new Date(),
           status: data.status,
-          progress: data.progress
+          progress: data.progress,
+          analysisProgress: data.analysisProgress,
+          currentStep: data.currentStep,
+          stepDetails: data.stepDetails,
+          duration: data.duration,
+          resolution: data.resolution,
+          thumbnailUrl: data.thumbnailUrl,
+          processingMetadata: data.processingMetadata
         });
       });
+      
+      // Debug: Log real-time updates for active processing videos
+      const processingVideos = videosList.filter(v => 
+        v.status === 'processing' || v.status === 'analyzing' || v.analysisProgress !== undefined
+      );
+      if (processingVideos.length > 0) {
+        console.log('📊 Real-time backend updates received:', processingVideos.map(v => ({
+          name: v.name,
+          status: v.status,
+          analysisProgress: v.analysisProgress,
+          currentStep: v.currentStep,
+          duration: v.duration,
+          resolution: v.resolution,
+          metadata: v.processingMetadata
+        })));
+        
+        // Show notification for completed analysis
+        processingVideos.forEach(v => {
+          if (v.status === 'analysis_complete') {
+            console.log(`🎉 Analysis completed for "${v.name}"! Ready to view.`);
+          } else if (v.status === 'analysis_partial') {
+            console.log(`⚠️ Analysis partially completed for "${v.name}".`);
+          } else if (v.status === 'analysis_failed') {
+            console.log(`❌ Analysis failed for "${v.name}".`);
+          }
+        });
+      }
       
       // Sort by upload date (newest first)
       videosList.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
@@ -137,13 +183,18 @@ export default function UploadPage() {
           <p>Signed in as: <strong>{user.email}</strong></p>
         </div>
         
-        {/* Video Library Popup - will be a separate component */}
+        {/* Video Library Popup */}
         {showVideoLibrary && (
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-4">
-            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-6xl max-h-[85vh] overflow-hidden">
               {/* Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">My Video Library</h2>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">My Video Library</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {videos.length} video{videos.length !== 1 ? 's' : ''} total
+                  </p>
+                </div>
                 <button 
                   onClick={() => setShowVideoLibrary(false)}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -154,35 +205,44 @@ export default function UploadPage() {
                 </button>
               </div>
               
-                             {/* Content */}
-               <div className="p-6 max-h-96 overflow-y-auto">
-                 {videosLoading ? (
-                   <div className="text-center py-12">
-                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                     <p className="text-gray-500">Loading videos...</p>
-                   </div>
-                 ) : videos.length === 0 ? (
-                   <div className="text-center text-gray-500 py-12">
-                     <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                     </svg>
-                     <p className="text-lg font-medium mb-2">No videos yet</p>
-                     <p>Upload your first video to get started!</p>
-                   </div>
-                 ) : (
-                   <div className="space-y-4">
-                     {videos.map((video) => (
-                       <VideoCard
-                         key={video.id}
-                         video={video}
-                         onPlay={(id) => console.log('Play video:', id)}
-                         onRetry={(id) => console.log('Retry video:', id)}
-                         onRename={(id, newName) => console.log('Rename video:', id, newName)}
-                       />
-                     ))}
-                   </div>
-                 )}
-               </div>
+              {/* Content */}
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 120px)' }}>
+                {videosLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading videos...</p>
+                  </div>
+                ) : videos.length === 0 ? (
+                  <div className="text-center text-gray-500 py-12">
+                    <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-lg font-medium mb-2">No videos yet</p>
+                    <p>Upload your first video to get started!</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {videos.map((video) => (
+                      <VideoCard
+                        key={video.id}
+                        video={video}
+                        onPlay={(id) => {
+                          console.log('Play video:', id);
+                          // TODO: Implement video player or analysis view
+                        }}
+                        onRetry={(id) => {
+                          console.log('Retry video:', id);
+                          // TODO: Implement retry functionality
+                        }}
+                        onClick={(id) => {
+                          console.log('Video card clicked:', id);
+                          // TODO: Implement video details view
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

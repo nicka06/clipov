@@ -205,7 +205,7 @@ export class SelfHostedVisualAnalyzer {
         });
         
         // Add parameters for better detection
-        formData.append('extract_frames', '8');  // More frames for better detection
+        formData.append('extract_frames', '12');  // More frames for better detection
         
         // Use URL parameters for confidence threshold
         const urlParams = new URLSearchParams({

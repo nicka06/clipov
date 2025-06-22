@@ -96,6 +96,14 @@ export class VideoSegmenter {
     const thumbnailTime = startTime + (duration / 2);
     await this.generateThumbnail(videoPath, thumbnailPath, thumbnailTime);
     
+    // Upload thumbnail to Cloud Storage IMMEDIATELY after generation
+    const thumbnailCloudPath = await this.uploadThumbnailToStorage(
+      thumbnailPath,
+      userId,
+      videoId,
+      segmentNumber
+    );
+    
     // Upload segment to Cloud Storage
     const cloudStoragePath = await this.uploadSegmentToStorage(
       videoSegmentPath,
@@ -104,7 +112,7 @@ export class VideoSegmenter {
       segmentNumber
     );
     
-    // Verify the upload completed and file exists in Cloud Storage
+    // Verify the uploads completed and files exist in Cloud Storage
     await this.verifySegmentUpload(cloudStoragePath);
     
     return {
@@ -114,7 +122,7 @@ export class VideoSegmenter {
       duration,
       videoPath: videoSegmentPath,
       audioPath: audioSegmentPath,
-      thumbnailPath,
+      thumbnailPath: thumbnailCloudPath, // Now points to Cloud Storage
       cloudStoragePath
     };
   }
@@ -274,6 +282,48 @@ export class VideoSegmenter {
     } catch (error) {
       console.error('Error verifying segment upload:', error);
       throw new Error(`Segment verification failed: ${error}`);
+    }
+  }
+
+  /**
+   * Upload thumbnail to Cloud Storage
+   */
+  async uploadThumbnailToStorage(
+    thumbnailPath: string,
+    userId: string,
+    videoId: string,
+    segmentNumber: number
+  ): Promise<string> {
+    try {
+      const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.GOOGLE_CLOUD_STORAGE_BUCKET;
+      if (!bucketName) {
+        throw new Error('Storage bucket not configured');
+      }
+      const fileName = `segment_${segmentNumber.toString().padStart(3, '0')}_thumbnail.jpg`;
+      const cloudPath = `videos/${userId}/${videoId}/segments/${fileName}`;
+      
+      console.log(`📸 Uploading thumbnail to gs://${bucketName}/${cloudPath}`);
+      
+      await this.storage
+        .bucket(bucketName)
+        .upload(thumbnailPath, {
+          destination: cloudPath,
+          metadata: {
+            metadata: {
+              videoId,
+              userId,
+              segmentNumber: segmentNumber.toString(),
+              type: 'thumbnail',
+              uploadedAt: new Date().toISOString()
+            }
+          }
+        });
+      
+      console.log(`📸 Thumbnail uploaded successfully: ${cloudPath}`);
+      return cloudPath;
+    } catch (error) {
+      console.error('❌ Error uploading thumbnail:', error);
+      throw new Error(`Thumbnail upload failed: ${error}`);
     }
   }
 

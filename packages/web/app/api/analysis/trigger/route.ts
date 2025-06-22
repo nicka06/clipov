@@ -224,7 +224,7 @@ async function processVideoInBackground(videoId: string, userId: string, analysi
           endTime: segment.endTime,
           duration: segment.duration,
           videoPath: segment.cloudStoragePath,
-          thumbnailPath: `videos/${userId}/${videoId}/thumbnails/segment_${segment.segmentNumber.toString().padStart(3, '0')}.jpg`,
+          thumbnailPath: segment.thumbnailPath, // Use the actual Cloud Storage path from segmenter
           
           // Placeholder for AI analysis results (will be filled by analysis pipeline)
           people: [],
@@ -294,7 +294,7 @@ async function processVideoInBackground(videoId: string, userId: string, analysi
       console.log(`⚡ SELF-HOSTED OPTIMIZATION: No more Google API quotas - processing at full speed!`);
       await adminDb.collection('videos').doc(videoId).update({
         analysisProgress: 70,
-        currentStep: 'AI Analysis (Self-Hosted Parallel Processing)',
+        currentStep: 'AI Analysis',
         stepDetails: `Running parallel self-hosted AI analysis on ${segments.length} segments`
       });
       
@@ -497,16 +497,32 @@ async function processVideoInBackground(videoId: string, userId: string, analysi
         statusEmoji = '❌';
       }
       
-      // Step 10: Mark analysis with appropriate status
+      // Step 10: Set thumbnail URL from first segment and mark analysis complete
       const totalDuration = Math.round((Date.now() - analysisStartTime) / 1000);
       console.log(`🏁 Step 10: Finalizing analysis... (100% complete)`);
       console.log(`${statusEmoji} Final Status: ${finalStatus} (${Math.round(successRate*100)}% success rate)`);
+      
+      // Get thumbnail URL from first segment for the main video
+      let thumbnailUrl = null;
+      if (segments.length > 0) {
+        const firstSegment = segments[0];
+        // Convert Cloud Storage path to Firebase Storage URL
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.GOOGLE_CLOUD_STORAGE_BUCKET;
+        if (bucketName && firstSegment.thumbnailPath) {
+          // Convert path to encoded format for Firebase Storage URL
+          const encodedPath = firstSegment.thumbnailPath.replace(/\//g, '%2F');
+          thumbnailUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media`;
+          console.log(`📸 Setting video thumbnail from first segment: ${thumbnailUrl}`);
+          console.log(`📂 Thumbnail path: ${firstSegment.thumbnailPath}`);
+        }
+      }
       
       try {
         await adminDb.collection('videos').doc(videoId).update({
           status: finalStatus,
           analysisProgress: 100,
           analyzedAt: new Date(),
+          thumbnailUrl: thumbnailUrl, // Add thumbnail URL to main video document
           currentStep: finalStatus === 'analysis_complete' ? 'Analysis complete' : 
                       finalStatus === 'analysis_partial' ? 'Analysis partially complete' : 'Analysis failed',
           stepDetails: `Analyzed ${segments.length} segments: ${successfulSegments} successful, ${failedSegments} failed (${Math.round(successRate*100)}% success rate)`,
