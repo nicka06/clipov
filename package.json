@@ -1,0 +1,28 @@
+{
+  "name": "clipov-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/web",
+    "build": "npm run build --workspace=packages/web",
+    "lint": "npm run lint --workspace=packages/web",
+    "install-all": "npm install"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "^7.1.0",
+    "@google-cloud/storage": "^7.16.0",
+    "@google-cloud/tasks": "^6.1.0",
+    "@google-cloud/video-intelligence": "^6.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "uuid": "^11.1.0",
+    "@types/uuid": "^10.0.0"
+  }
+} 

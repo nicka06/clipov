@@ -1,0 +1,49 @@
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/clipov-ai-service:$BUILD_ID', '.']
+    timeout: '1200s'  # 20 minutes for model downloads
+
+  # Push the image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/clipov-ai-service:$BUILD_ID']
+
+  # Tag as latest
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['tag', 'gcr.io/$PROJECT_ID/clipov-ai-service:$BUILD_ID', 'gcr.io/$PROJECT_ID/clipov-ai-service:latest']
+
+  # Push latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/clipov-ai-service:latest']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'clipov-ai-service'
+      - '--image=gcr.io/$PROJECT_ID/clipov-ai-service:$BUILD_ID'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--memory=4Gi'
+      - '--cpu=2'
+      - '--timeout=900'
+      - '--max-instances=10'
+      - '--min-instances=0'
+      - '--concurrency=10'
+      - '--port=8080'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=WHISPER_MODEL=base,YOLO_MODEL=yolov8n.pt,CLIP_MODEL=ViT-B/32'
+
+# Specify machine type for build (need more resources for AI models)
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: '100'
+  
+# Build timeout (models can take time to download)
+timeout: '2400s'  # 40 minutes
+
+# Images to be pushed to Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/clipov-ai-service:$BUILD_ID'
+  - 'gcr.io/$PROJECT_ID/clipov-ai-service:latest' 

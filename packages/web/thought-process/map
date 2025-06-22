@@ -1,0 +1,492 @@
+# Intelligent Video Compilation Platform - Technical Flow Map
+
+## 🎯 System Overview
+Transform passive video archives into an active, searchable, creative canvas through AI analysis and natural language processing.
+
+**Core Philosophy**: Upload → AI Analysis → Natural Language Search → Automated Video Compilation
+
+---
+
+## 🏗️ Google Cloud Platform Architecture
+
+**Next.js Full-Stack App on Cloud Run**
+           ↕
+**Firebase Auth** ↔ **Firestore** ↔ **Cloud Storage** ↔ **AI Pipeline**
+
+### Complete Tech Stack
+- **Framework**: Next.js 14 with TypeScript
+- **Frontend**: React components with Tailwind CSS
+- **Backend**: Next.js API routes (serverless functions)
+- **Hosting**: Google Cloud Run (auto-scaling containers)
+- **Authentication**: Firebase Auth (Google OAuth + email/password)
+- **Database**: Firestore (real-time, user data, upload sessions)
+- **Storage**: Cloud Storage (video files)
+- **AI Services**: Video Intelligence API + Speech-to-Text API
+- **State Management**: React Context API
+- **Package Manager**: npm
+
+---
+
+## 📋 Phase 1: Authentication & User Management
+
+### 1.1 Landing Page Flow
+1. **Homepage**: Minimal, clean interface explaining the platform value
+   - Hero section: "Upload videos, search with AI, create compilations"
+   - Two main CTAs: "Sign Up" and "Sign In" buttons
+   - Simple, professional design with Tailwind CSS
+2. **No Guest Access**: All features require authentication for cross-device persistence
+
+### 1.2 Authentication System
+**Sign Up Flow**:
+1. User clicks "Sign Up" → Sign up form page
+2. **Two Options**:
+   - Google OAuth (one-click, recommended)
+   - Email/password form (email, password, confirm password)
+3. **Account Creation**: Create user document in Firestore
+4. **Redirect**: Successful signup → Upload page (Phase 2)
+
+**Sign In Flow**:
+1. User clicks "Sign In" → Sign in form page  
+2. **Two Options**:
+   - Google OAuth
+   - Email/password form
+3. **Authentication**: Firebase Auth validation
+4. **Redirect**: Successful login → Upload page (Phase 2)
+
+**Forgot Password Flow**:
+1. "Forgot Password?" link on sign in page
+2. Email input form
+3. Firebase sends password reset email
+4. User resets password via email link
+5. Redirect back to sign in page
+
+### 1.3 Database Schema (Firestore)
+
+**Users Collection** (`users/{userId}`):
+```json
+{
+  "uid": "firebase_user_id",
+  "email": "user@example.com", 
+  "authProvider": "google" | "email",
+  "createdAt": "timestamp",
+  "lastLoginAt": "timestamp",
+}
+```
+
+### 1.4 UI Components Structure
+**Pages**:
+- `/` - Landing page with auth CTAs
+- `/auth/signup` - Sign up form  
+- `/auth/signin` - Sign in form
+- `/auth/forgot-password` - Password reset form
+- `/upload` - Main upload interface (Phase 2)
+
+**Components**:
+- `AuthLayout` - Shared layout for auth pages
+- `SignUpForm` - Email/password + Google OAuth signup
+- `SignInForm` - Email/password + Google OAuth signin  
+- `ForgotPasswordForm` - Password reset request
+- `AuthProvider` - Context for auth state management
+
+### 1.5 Navigation Flow
+```
+Homepage (/) 
+    ├── Sign Up → /auth/signup → Account Creation → /upload
+    ├── Sign In → /auth/signin → Authentication → /upload
+    └── Sign In → Forgot Password → /auth/forgot-password → Email Sent → /auth/signin
+```
+
+### 1.6 Authentication State Management
+- **Firebase Auth**: Handles all authentication logic
+- **React Context**: `AuthProvider` wraps entire app
+- **Route Protection**: Upload page requires authentication
+- **Persistent Sessions**: Users stay logged in across browser sessions
+- **Auto-redirect**: Authenticated users accessing auth pages redirect to /upload
+
+### Key Benefits of This Architecture
+- **Cross-device continuity**: Users can switch devices seamlessly
+- **Secure by default**: All video data tied to authenticated users
+- **Scalable auth**: Firebase handles user management automatically
+- **Simple UX**: Minimal friction to get users into the main upload flow
+- **Future-ready**: Database structure supports Phase 2 video AI features
+
+---
+
+## 📋 Phase 2: Upload & Initial Processing
+
+### 1.1 Upload Initiation Flow
+1. **User Authentication Check**: Verify user is signed in
+2. **File Selection**: Drag & drop or file picker interface
+3. **File Validation**: Check type, size, and user quota limits
+4. **Adaptive Chunking**: Determine optimal chunk size based on file size
+   - Small files (< 1GB): 5MB chunks
+   - Medium files (1-10GB): 10MB chunks  
+   - Large files (> 10GB): 20MB chunks
+5. **Upload Session Creation**: Generate unique video ID and save to Firestore
+
+### 1.2 Secure Upload URL Generation
+1. **Cloud Function Trigger**: Frontend requests upload URLs
+2. **User Verification**: Validate JWT token and user permissions
+3. **Signed URL Creation**: Generate time-limited upload URLs for each chunk
+4. **Session Storage**: Save upload session details to Firestore
+5. **URL Response**: Return array of signed URLs to frontend
+
+### 1.3 Direct Upload Process
+1. **Parallel Chunk Upload**: Upload multiple chunks simultaneously to Cloud Storage
+2. **Real-time Progress**: Update UI and Firestore after each successful chunk
+3. **Error Handling**: Retry failed chunks with exponential backoff
+4. **State Persistence**: All progress saved to Firestore (not localStorage)
+5. **Resume Capability**: Users can continue from any device/browser
+
+### 1.4 Upload Completion & Reassembly
+1. **Completion Verification**: Check all chunks uploaded successfully
+2. **Cloud Function Trigger**: Frontend calls finalize endpoint
+3. **Chunk Verification**: Verify all chunks exist in Cloud Storage
+4. **Video Reassembly**: Use Cloud Storage compose operation to merge chunks
+5. **Status Update**: Mark video as ready for processing in Firestore
+6. **Pipeline Trigger**: Initiate AI analysis phase
+
+### 1.5 Video Library Interface Flow
+1. **Library Access**: Floating toggle button at bottom of upload page
+2. **Library Overlay**: Slides up as modal overlay (doesn't navigate away)
+3. **Card Generation**: Query Firestore for user's videos, render as cards
+4. **Real-time Updates**: Subscribe to Firestore changes for live status updates
+5. **Card Display**: Each card shows video name + visual status indicator
+
+### 1.6 Video Library Status System
+**Status Indicators**:
+- **Uploading**: Progress ring with percentage + upload arrow icon
+- **Paused/Failed**: Red warning icon with retry option
+- **Processing**: Spinning gear icon (video reassembly/AI analysis)
+- **Completed**: Green checkmark with play button
+
+**Card Information**:
+- Video display name (user can rename inline)
+- Upload date/time
+- File size
+- Current status with appropriate icon
+- Progress bar (if uploading/processing)
+
+### 1.7 Library Data Flow
+1. **Firestore Query**: Get all videos where `userId == currentUser.uid`
+2. **Status Mapping**: Map database status to UI indicator
+3. **Real-time Sync**: Firestore onSnapshot listener updates cards instantly
+4. **User Actions**: Rename video → Update Firestore → UI reflects change
+5. **Upload Resume**: Click paused upload → Resume chunked upload process
+
+### 1.8 Library UI Behavior
+- **Responsive Grid**: Cards arranged in responsive grid layout
+- **Inline Editing**: Click video name to rename (saves to Firestore)
+- **Status Actions**: Click status indicator for relevant actions (retry, resume, etc.)
+- **Auto-refresh**: Library updates automatically as uploads progress
+- **Close Library**: Click outside overlay or toggle button to close
+
+### Key Features
+- **Cross-device resume**: Upload state saved to user's cloud account
+- **Intelligent retry**: Failed chunks automatically retried
+- **Cost optimization**: Direct upload to storage (bypasses function data limits)
+- **Security**: Time-limited signed URLs, user authentication required
+- **Scalability**: Handles 5-minute to 12-hour videos efficiently
+- **Real-time library**: Video cards update live during upload/processing
+
+---
+
+## 📋 Phase 3: AI Analysis Pipeline - Complete Step-by-Step Flow
+
+### 3.1 TRIGGER: Analysis Initiation
+**Step 1**: Phase 2 upload finalization completes successfully
+**Step 2**: `finalize/route.ts` updates video status in Firestore: `status: "ready_for_analysis"`
+**Step 3**: Firestore trigger or Cloud Task queues analysis job with video metadata
+**Step 4**: Cloud Run analysis container spins up and receives job parameters
+**Step 5**: Update video status to `status: "analyzing"` → User sees "Analyzing..." in video library
+
+### 3.2 PREPARATION: Video Processing Setup
+**Step 6**: Download original video file from Cloud Storage to analysis container
+**Step 7**: Validate video file integrity and format compatibility
+**Step 8**: Extract basic metadata: duration, resolution, frame rate, audio channels
+**Step 9**: Convert video to standardized format if needed (1080p, H.264, AAC audio)
+**Step 10**: Extract separate audio track (.wav format) for speech processing
+**Step 11**: Calculate total expected 5-second segments: `Math.ceil(videoDuration / 5)`
+**Step 12**: Create processing workspace directory structure in container
+
+### 3.3 SEGMENTATION: Create 5-Second Clips
+**Step 13**: Start segmentation loop from 0:00 to end of video
+**Step 14**: For each 5-second window (0-5s, 5-10s, 10-15s, etc.):
+  - Extract video segment using FFmpeg: `ffmpeg -ss START -t 5 -i input.mp4 segment_N.mp4`
+  - Extract corresponding audio segment: `ffmpeg -ss START -t 5 -i input.wav segment_N.wav`
+  - Generate segment thumbnail (frame at 2.5-second mark)
+  - Create segment metadata object with start/end times
+**Step 15**: Handle final segment (may be <5 seconds if video doesn't divide evenly)
+**Step 16**: Upload all 5-second video segments to Cloud Storage: `videos/{userId}/{videoId}/segments/`
+**Step 17**: Create segments array in memory for processing queue
+
+### 3.4 AUDIO ANALYSIS: Speech Processing Per Segment
+**Step 18**: Initialize Google Speech-to-Text API client with configuration:
+  - Language: Auto-detect or user-specified
+  - Speaker diarization: Enabled (max 6 speakers)
+  - Word-level timestamps: Enabled
+  - Audio events detection: Enabled
+
+**Step 19**: Process each 5-second audio segment sequentially:
+  - Upload audio segment to Speech-to-Text API
+  - Receive transcription with speaker labels and timestamps
+  - Extract non-speech audio events (laughter, music, applause, etc.)
+  - Store results in segment analysis object
+
+**Step 20**: Cross-segment speaker linking:
+  - Compare speaker voice characteristics across segments
+  - Build consistent speaker ID mapping (Speaker_1, Speaker_2, etc.)
+  - Update all segment transcriptions with consistent speaker IDs
+
+### 3.5 VISUAL ANALYSIS: Video Intelligence Per Segment
+**Step 21**: Initialize Google Video Intelligence API client with features:
+  - Object detection and tracking
+  - Person detection and face recognition
+  - Activity recognition
+  - Scene change detection
+  - Text detection (signs, captions)
+
+**Step 22**: Process each 5-second video segment in parallel batches (5 segments at once):
+  - Upload segment to Video Intelligence API
+  - Request: Object detection, person detection, activity recognition
+  - Receive: Objects with confidence scores, person bounding boxes, activities
+  - Extract spatial relationships between detected elements
+  - Store visual analysis results for each segment
+
+**Step 23**: Cross-segment person linking:
+  - Compare face embeddings across segments to identify same people
+  - Build consistent person ID mapping (Person_1, Person_2, etc.)
+  - Track person appearance/disappearance patterns
+  - Update all segments with consistent person IDs
+
+### 3.6 CROSS-MODAL LINKING: Connect Audio + Visual
+**Step 24**: For each 5-second segment, perform audio-visual synchronization:
+  - Identify when a person's mouth is moving (visual) + speech is detected (audio)
+  - Link Speaker IDs to Person IDs when they occur simultaneously
+  - Build speaker-to-face mapping table
+  - Handle cases where multiple people speak or faces aren't visible
+
+**Step 25**: Resolve conflicts and ambiguities:
+  - If Speaker_1 maps to multiple faces, use confidence scores and context
+  - If Person_1 sometimes speaks and sometimes doesn't, track speaking patterns
+  - Create final Person profiles with both visual and audio characteristics
+
+### 3.7 SCENE DESCRIPTION: Generate Rich Metadata
+**Step 26**: For each 5-second segment, generate comprehensive description:
+
+**People Analysis**:
+- Count visible people and their descriptions
+- Identify who is speaking vs. who is visible but silent
+- Describe clothing, posture, facial expressions
+- Note actions: "talking", "laughing", "walking", "gesturing"
+
+**Object Detection**:
+- List all medium/major objects with confidence >0.7
+- Group related objects: "kitchen items", "furniture", "technology"
+- Note object interactions: "person holding phone", "dog near couch"
+
+**Activity Recognition**:
+- Identify primary activity: "conversation", "cooking", "playing", "working"
+- Note secondary activities: "background music playing", "dog walking by"
+- Describe movement patterns: "person walking left to right", "camera panning"
+
+**Spatial Context**:
+- Determine scene type: "kitchen", "living room", "outdoor", "office"
+- Note lighting conditions: "bright daylight", "dim evening", "artificial lighting"
+- Describe camera perspective: "close-up", "wide shot", "over-shoulder view"
+
+### 3.8 SEARCHABLE TEXT GENERATION
+**Step 27**: For each segment, create optimized search strings:
+- **People**: "blonde woman red shirt talking man blue jeans listening"
+- **Objects**: "kitchen counter apples coffee mug laptop smartphone"
+- **Actions**: "cooking chopping vegetables phone conversation laughing"
+- **Context**: "kitchen daytime conversation casual cooking preparation"
+- **Audio**: "upbeat talking chopping sounds phone notification"
+
+**Step 28**: Combine all elements into master searchable text:
+```
+"blonde woman red shirt talking chopping vegetables kitchen counter apples knife cooking man blue jeans listening phone conversation smartphone notification casual daytime"
+```
+
+### 3.9 DATA STORAGE: Save to Firestore
+**Step 29**: Create Firestore document structure for each segment:
+
+```json
+videos/{videoId}/segments/segment_{N}: {
+  "segmentNumber": 1,
+  "startTime": 0.0,
+  "endTime": 5.0,
+  "duration": 5.0,
+  "videoPath": "videos/user123/vid789/segments/segment_001.mp4",
+  "thumbnailPath": "videos/user123/vid789/thumbnails/segment_001.jpg",
+  
+  "people": [
+    {
+      "personId": "person_1",
+      "description": "blonde woman in red sweater",
+      "boundingBox": {"x": 0.2, "y": 0.1, "width": 0.3, "height": 0.8},
+      "actions": ["talking", "chopping"],
+      "speakerLabel": "Speaker_1",
+      "confidence": 0.94,
+      "isSpeaking": true,
+      "facialExpression": "focused"
+    }
+  ],
+  
+  "objects": [
+    {"name": "kitchen counter", "confidence": 0.98, "boundingBox": {...}},
+    {"name": "knife", "confidence": 0.91, "boundingBox": {...}},
+    {"name": "carrots", "confidence": 0.87, "boundingBox": {...}}
+  ],
+  
+  "activities": [
+    {"name": "cooking", "confidence": 0.93},
+    {"name": "food preparation", "confidence": 0.89},
+    {"name": "conversation", "confidence": 0.85}
+  ],
+  
+  "audio": {
+    "transcript": "So I think we should add more seasoning to this",
+    "speakerCount": 1,
+    "audioEvents": ["chopping sounds", "kitchen ambiance"],
+    "volume": "moderate",
+    "clarity": "clear"
+  },
+  
+  "sceneContext": {
+    "location": "kitchen",
+    "timeOfDay": "daytime", 
+    "lighting": "natural bright",
+    "cameraAngle": "medium shot",
+    "mood": "casual"
+  },
+  
+  "searchableText": "blonde woman red sweater talking chopping kitchen counter knife carrots cooking food preparation conversation seasoning daytime natural lighting",
+  
+  "processingMetadata": {
+    "analyzedAt": "2024-01-15T10:33:15Z",
+    "videoIntelligenceTime": 12.3,
+    "speechToTextTime": 8.7,
+    "totalProcessingTime": 21.0,
+    "apiCosts": {
+      "videoIntelligence": 0.05,
+      "speechToText": 0.02,
+      "total": 0.07
+    }
+  }
+}
+```
+
+### 3.10 PROGRESS TRACKING: Real-Time Updates
+**Step 30**: Throughout processing, update progress in real-time:
+- After each segment completes: Update `segmentsProcessed` counter
+- Calculate percentage: `(segmentsProcessed / totalSegments) * 100`
+- Update Firestore: `videos/{videoId}.analysisProgress = percentage`
+- Frontend subscribes to this field and updates progress bar in real-time
+
+### 3.11 COMPLETION: Finalize Analysis
+**Step 31**: When all segments are processed:
+- Update video status: `status: "analysis_complete"`
+- Set completion timestamp: `analyzedAt: currentTimestamp`
+- Calculate total costs and processing time
+- Update segment count: `segmentCount: actualSegmentCount`
+- Clean up temporary processing files in container
+
+**Step 32**: Generate video-level summary:
+- Total people detected across all segments
+- Most common objects/activities
+- Primary scene locations
+- Total speaking time per person
+- Overall video themes and context
+
+**Step 33**: Update UI in real-time:
+- Video library card changes from "Analyzing 87%" to "✓ Ready to Search"
+- User can now search and browse this video's segments
+- Segments are available for timeline viewing and expansion
+
+### 3.12 ERROR HANDLING: Recovery Process
+**Step 34**: If any step fails:
+- Save current progress state to Firestore
+- Mark specific failed segments for retry
+- Continue processing remaining segments
+- Retry failed segments up to 3 times with exponential backoff
+
+**Step 35**: If processing completely fails:
+- Update status: `status: "analysis_failed"`
+- Save error details and partial results
+- Notify user with retry option
+- Preserve uploaded video for manual reprocessing
+
+### 3.13 COST OPTIMIZATION: Smart Processing
+**Step 36**: Implement cost controls:
+- Skip segments that are completely black/silent (scene transitions)
+- Batch similar segments for bulk API processing
+- Use lower-cost APIs for simple segments (static scenes)
+- Stop processing if user cost quota is exceeded
+
+### 3.14 USER EXPERIENCE: Timeline Interface
+**Step 37**: After analysis completion, user sees:
+- Timeline with 5-second segment thumbnails
+- Click segment → View detailed analysis
+- Drag to select multiple segments → Expand to longer clip
+- Search functionality across all segments
+- Real-time segment browsing with rich metadata display
+
+## Processing Time & Cost Estimates
+**10-minute video (120 segments)**:
+- Segmentation: 2 minutes
+- Audio Analysis: 3 minutes (parallel processing)
+- Visual Analysis: 8 minutes (parallel batches)
+- Cross-modal linking: 1 minute
+- Description generation: 2 minutes
+- Data storage: 1 minute
+- **Total Processing Time**: ~17 minutes
+- **API Costs**: ~$15-20 per 10-minute video
+
+**Key Benefits of 5-Second Segments**:
+- **Granular Control**: Users can expand/contract clips precisely
+- **Fast Search**: Quick preview of exact moments
+- **Efficient Processing**: Parallel segment analysis
+- **Cost Effective**: Skip boring/empty segments
+- **User Experience**: Immediate visual timeline browsing
+
+---
+
+## 📋 Phase 4: Search & Compilation (Future)
+
+### User Search Flow
+1. **Natural Language Query**: User types "exciting goal moments"
+2. **Semantic Search**: Convert query to vector, find matching scenes
+3. **Director Algorithm**: Select best scenes within time constraints  
+4. **Video Compilation**: Extract and stitch scenes using FFmpeg
+5. **Delivery**: Present compiled video to user
+
+---
+
+## 🔄 Cross-Phase Considerations
+
+### Data Flow Principles
+- **User-Centric**: All data tied to authenticated user accounts
+- **Resumable**: Every long-running process can be interrupted and resumed
+- **Real-time**: UI updates immediately reflect backend state changes
+- **Secure**: All operations require authentication and authorization
+- **Cost-Efficient**: Direct storage uploads, serverless compute
+- **Scalable**: Architecture handles 1 user or 10,000 users identically
+
+### Error Handling Strategy
+- **Graceful Degradation**: System works with partial failures
+- **User Communication**: Clear error messages and recovery options
+- **Automatic Retry**: Exponential backoff for transient failures
+- **Manual Recovery**: Admin tools for stuck processes
+- **Monitoring**: Real-time alerts for system issues
+
+### Security Considerations
+- **Authentication**: Firebase Auth with social login options
+- **Authorization**: User can only access their own content
+- **Data Privacy**: Upload sessions and videos tied to user accounts
+- **Content Validation**: File type and size restrictions enforced
+- **Rate Limiting**: Prevent abuse with quota systems
+
+---
+
+*This map provides the logical flow and decision points for each phase. Detailed implementation code is maintained in the todo file.*

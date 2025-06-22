@@ -1,0 +1,30 @@
+{
+  "name": "@clipov/shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "@google-cloud/speech": "^7.1.0",
+    "@google-cloud/storage": "^7.16.0",
+    "@google-cloud/tasks": "^6.1.0",
+    "@google-cloud/video-intelligence": "^6.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@types/node": "^20",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "form-data": "^2.5.3",
+    "formdata-node": "^6.0.3",
+    "node-fetch": "^2.7.0"
+  }
+}

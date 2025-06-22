@@ -1,0 +1,52 @@
+# Git and version control
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.env
+.env.*
+!.env.example
+config.env.example
+
+# Testing
+tests/
+*.test
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Docker files (except Dockerfile)
+docker-compose.yml
+docker-compose.*.yml
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.log
+
+# Python virtual environments
+venv/
+env/
+.venv/ 

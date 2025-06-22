@@ -97,6 +97,12 @@ Thumbs.db
 firebase-debug.log
 firestore-debug.log
 
+# Google Cloud credentials
+clipov-service-account-key.json
+*.json
+!package*.json
+!tsconfig*.json
+
 # Logs
 logs
 *.log

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - WHISPER_MODEL=base
+      - YOLO_MODEL=yolov8n.pt
+      - CLIP_MODEL=ViT-B/32
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./temp:/app/temp
+      - ./models:/app/models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: Add a reverse proxy for production-like testing
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ai-service
+    profiles:
+      - production 
